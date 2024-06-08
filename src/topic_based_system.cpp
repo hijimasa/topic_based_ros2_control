@@ -302,6 +302,8 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
         if (interface.name == hardware_interface::HW_IF_POSITION)
         {
           joint_state.name.push_back(info_.joints[i].name);
+          joint_state.velocity.push_back(-4.0e+38);
+          joint_state.effort.push_back(-4.0e+38);
           joint_state.position.push_back(joint_commands_[POSITION_INTERFACE_INDEX][i]);
         }
       }
@@ -318,6 +320,8 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
             if (joint_state.name[index] == mimic_joint.mimicked_joint_name)
             {
               joint_state.name.push_back(mimic_joint.joint_name);
+              joint_state.velocity.push_back(-4.0e+38);
+              joint_state.effort.push_back(-4.0e+38);
               joint_state.position.push_back(mimic_joint.multiplier * joint_state.position[index]);          
             }
           }
@@ -344,6 +348,7 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
         {
           joint_state.name.push_back(info_.joints[i].name);
           joint_state.velocity.push_back(joint_commands_[VELOCITY_INTERFACE_INDEX][i]);
+          joint_state.effort.push_back(-4.0e+38);
         }
       }
     }
@@ -359,7 +364,8 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
             if (joint_state.name[index] == mimic_joint.mimicked_joint_name)
             {
               joint_state.name.push_back(mimic_joint.joint_name);
-              joint_state.position.push_back(mimic_joint.multiplier * joint_state.velocity[index]);          
+              joint_state.velocity.push_back(mimic_joint.multiplier * joint_state.velocity[index]);          
+              joint_state.effort.push_back(-4.0e+38);
             }
           }
         }
@@ -405,7 +411,7 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
             if (joint_state.name[index] == mimic_joint.mimicked_joint_name)
             {
               joint_state.name.push_back(mimic_joint.joint_name);
-              joint_state.position.push_back(mimic_joint.multiplier * joint_state.effort[index]);          
+              joint_state.effort.push_back(mimic_joint.multiplier * joint_state.effort[index]);          
             }
           }
         }
