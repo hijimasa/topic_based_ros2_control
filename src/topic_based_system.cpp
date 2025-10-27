@@ -61,6 +61,111 @@ static constexpr std::size_t VELOCITY_INTERFACE_INDEX = 1;
 // JointState doesn't contain an acceleration field, so right now it's not used
 static constexpr std::size_t EFFORT_INTERFACE_INDEX = 3;
 
+#if defined(ROS2_CONTROL_USE_NEW_INIT)
+CallbackReturn TopicBasedSystem::on_init(const hardware_interface::HardwareComponentInterfaceParams & params)
+{
+  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
+  {
+    return CallbackReturn::ERROR;
+  }
+
+  const auto& info = params.hardware_info;
+
+  // Initialize storage for all joints' standard interfaces, regardless of their existence and set all values to nan
+  joint_commands_.resize(standard_interfaces_.size());
+  joint_states_.resize(standard_interfaces_.size());
+  for (auto i = 0u; i < standard_interfaces_.size(); i++)
+  {
+    joint_commands_[i].resize(info.joints.size(), 0.0);
+    joint_states_[i].resize(info.joints.size(), 0.0);
+  }
+
+  // Initial command values
+  for (auto i = 0u; i < info.joints.size(); i++)
+  {
+    const auto& component = info.joints[i];
+    for (const auto& interface : component.state_interfaces)
+    {
+      auto it = std::find(standard_interfaces_.begin(), standard_interfaces_.end(), interface.name);
+      // If interface name is found in the interfaces list
+      if (it != standard_interfaces_.end())
+      {
+        auto index = static_cast<std::size_t>(std::distance(standard_interfaces_.begin(), it));
+        // Check the initial_value param is used
+        if (!interface.initial_value.empty())
+        {
+          joint_states_[index][i] = std::stod(interface.initial_value);
+          joint_commands_[index][i] = std::stod(interface.initial_value);
+        }
+      }
+    }
+  }
+
+  // Search for mimic joints
+  for (auto i = 0u; i < info.joints.size(); ++i)
+  {
+    const auto& joint = info.joints.at(i);
+    if (joint.parameters.find("mimic") != joint.parameters.cend())
+    {
+      const auto mimicked_joint_it = std::find_if(
+          info.joints.begin(), info.joints.end(),
+          [&mimicked_joint = joint.parameters.at("mimic")](const hardware_interface::ComponentInfo& joint_info) {
+            return joint_info.name == mimicked_joint;
+          });
+      if (mimicked_joint_it == info.joints.cend())
+      {
+        throw std::runtime_error(std::string("Mimicked joint '") + joint.parameters.at("mimic") + "' not found");
+      }
+      MimicJoint mimic_joint;
+      mimic_joint.joint_name = joint.name;
+      mimic_joint.mimicked_joint_name = mimicked_joint_it->name;
+      mimic_joint.joint_index = i;
+      mimic_joint.mimicked_joint_index =
+          static_cast<std::size_t>(std::distance(info.joints.begin(), mimicked_joint_it));
+      auto param_it = joint.parameters.find("multiplier");
+      if (param_it != joint.parameters.end())
+      {
+        mimic_joint.multiplier = std::stod(joint.parameters.at("multiplier"));
+      }
+      mimic_joints_.push_back(mimic_joint);
+    }
+  }
+
+  const auto get_hardware_parameter = [this, &info](const std::string& parameter_name, const std::string& default_value) {
+    if (auto it = info.hardware_parameters.find(parameter_name); it != info.hardware_parameters.end())
+    {
+      return it->second;
+    }
+    return default_value;
+  };
+
+  // Add random ID to prevent warnings about multiple publishers within the same node
+  rclcpp::NodeOptions options;
+  options.arguments({ "--ros-args", "-r", "__node:=topic_based_ros2_control_" + info.name });
+
+  node_ = rclcpp::Node::make_shared("_", options);
+
+  if (auto it = info.hardware_parameters.find("trigger_joint_command_threshold"); it != info.hardware_parameters.end())
+  {
+    trigger_joint_command_threshold_ = std::stod(it->second);
+  }
+
+  topic_based_joint_commands_publisher_ = node_->create_publisher<sensor_msgs::msg::JointState>(
+      get_hardware_parameter("joint_commands_topic", "/robot_joint_commands"), rclcpp::QoS(1));
+  topic_based_joint_states_subscriber_ = node_->create_subscription<sensor_msgs::msg::JointState>(
+      get_hardware_parameter("joint_states_topic", "/robot_joint_states"), rclcpp::SensorDataQoS(),
+      [this](const sensor_msgs::msg::JointState::SharedPtr joint_state) { latest_joint_state_ = *joint_state; });
+
+  // if the values on the `joint_states_topic` are wrapped between -2*pi and 2*pi (like they are in Isaac Sim)
+  // sum the total joint rotation returned on the `joint_states_` interface
+  if (get_hardware_parameter("sum_wrapped_joint_states", "false") == "true")
+  {
+    sum_wrapped_joint_states_ = true;
+  }
+
+  return CallbackReturn::SUCCESS;
+}
+#else
 CallbackReturn TopicBasedSystem::on_init(const hardware_interface::HardwareInfo& info)
 {
   if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
@@ -162,6 +267,7 @@ CallbackReturn TopicBasedSystem::on_init(const hardware_interface::HardwareInfo&
 
   return CallbackReturn::SUCCESS;
 }
+#endif
 
 std::vector<hardware_interface::StateInterface> TopicBasedSystem::export_state_interfaces()
 {

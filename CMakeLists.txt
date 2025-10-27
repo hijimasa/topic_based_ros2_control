@@ -8,6 +8,14 @@ endif()
 
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
+set(_OLD_ROS2_DISTROS ardent bouncy crystal dashing eloquent foxy galactic humble)
+list(FIND _OLD_ROS2_DISTROS "$ENV{ROS_DISTRO}" _idx)
+if(_idx GREATER -1)
+  add_compile_definitions(ROS2_CONTROL_USE_OLD_INIT=1)
+else()
+  add_compile_definitions(ROS2_CONTROL_USE_NEW_INIT=1)
+endif()
+
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   angles
   rclcpp

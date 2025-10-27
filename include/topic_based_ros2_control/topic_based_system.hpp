@@ -42,6 +42,9 @@
 #include <hardware_interface/system_interface.hpp>
 #include <hardware_interface/types/hardware_interface_return_values.hpp>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
+#if defined(ROS2_CONTROL_USE_NEW_INIT)
+#include <hardware_interface/types/hardware_component_interface_params.hpp>
+#endif
 #include <rclcpp/node.hpp>
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/subscription.hpp>
@@ -55,7 +58,11 @@ using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface
 class TopicBasedSystem : public hardware_interface::SystemInterface
 {
 public:
+#if defined(ROS2_CONTROL_USE_NEW_INIT)
+  CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams& params) override;
+#else
   CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+#endif
 
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
 
