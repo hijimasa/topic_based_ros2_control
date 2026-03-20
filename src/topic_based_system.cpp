@@ -273,6 +273,19 @@ std::vector<hardware_interface::StateInterface> TopicBasedSystem::export_state_i
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
 
+  // Ensure vectors are initialized (handles ros2_control v4.42+ init ordering where
+  // export_state_interfaces may be called before on_init completes)
+  if (joint_states_.empty())
+  {
+    joint_commands_.resize(standard_interfaces_.size());
+    joint_states_.resize(standard_interfaces_.size());
+    for (auto i = 0u; i < standard_interfaces_.size(); i++)
+    {
+      joint_commands_[i].resize(info_.joints.size(), 0.0);
+      joint_states_[i].resize(info_.joints.size(), 0.0);
+    }
+  }
+
   // Joints' state interfaces
   for (auto i = 0u; i < info_.joints.size(); i++)
   {
@@ -294,7 +307,19 @@ std::vector<hardware_interface::CommandInterface> TopicBasedSystem::export_comma
 {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
 
-  // Joints' state interfaces
+  // Ensure vectors are initialized (same guard as export_state_interfaces)
+  if (joint_commands_.empty())
+  {
+    joint_commands_.resize(standard_interfaces_.size());
+    joint_states_.resize(standard_interfaces_.size());
+    for (auto i = 0u; i < standard_interfaces_.size(); i++)
+    {
+      joint_commands_[i].resize(info_.joints.size(), 0.0);
+      joint_states_[i].resize(info_.joints.size(), 0.0);
+    }
+  }
+
+  // Joints' command interfaces
   for (auto i = 0u; i < info_.joints.size(); i++)
   {
     const auto& joint = info_.joints[i];
