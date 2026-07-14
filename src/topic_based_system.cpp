@@ -351,19 +351,25 @@ hardware_interface::return_type TopicBasedSystem::read(const rclcpp::Time& /*tim
     if (it != joints.end())
     {
       auto j = static_cast<std::size_t>(std::distance(joints.begin(), it));
-      if (sum_wrapped_joint_states_)
+      // Guard each field: Isaac Sim may publish JointState messages whose
+      // position/velocity/effort arrays are empty or shorter than the name
+      // array (e.g. before the physics tensor API is initialized).
+      if (i < latest_joint_state_.position.size())
       {
-        sumRotationFromMinus2PiTo2Pi(latest_joint_state_.position[i], joint_states_[POSITION_INTERFACE_INDEX][j]);
+        if (sum_wrapped_joint_states_)
+        {
+          sumRotationFromMinus2PiTo2Pi(latest_joint_state_.position[i], joint_states_[POSITION_INTERFACE_INDEX][j]);
+        }
+        else
+        {
+          joint_states_[POSITION_INTERFACE_INDEX][j] = latest_joint_state_.position[i];
+        }
       }
-      else
-      {
-        joint_states_[POSITION_INTERFACE_INDEX][j] = latest_joint_state_.position[i];
-      }
-      if (!latest_joint_state_.velocity.empty())
+      if (i < latest_joint_state_.velocity.size())
       {
         joint_states_[VELOCITY_INTERFACE_INDEX][j] = latest_joint_state_.velocity[i];
       }
-      if (!latest_joint_state_.effort.empty())
+      if (i < latest_joint_state_.effort.size())
       {
         joint_states_[EFFORT_INTERFACE_INDEX][j] = latest_joint_state_.effort[i];
       }
